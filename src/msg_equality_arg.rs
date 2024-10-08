@@ -1,7 +1,10 @@
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ed_on_bls12_381::{EdwardsAffine as GAffine, Fr};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
-use ark_std::{UniformRand, io::{Read, Write}};
+use ark_std::{
+    io::{Read, Write},
+    UniformRand,
+};
 use rand::Rng;
 
 pub mod data_structures;
@@ -26,21 +29,21 @@ pub fn prove<R: Rng>(ck: &CommitKey, instance: &Instance, witness: &Witness, rng
     let a = witness.a;
     debug_assert_eq!(
         ck.commit_with_explicit_randomness(a, witness.r_1),
-        instance.comm_1
+        instance.comm_1,
+        "Commitment 1 does not match"
     );
     debug_assert_eq!(
         ck.commit_with_explicit_randomness(a, witness.r_2),
-        instance.comm_2
+        instance.comm_2,
+        "Commitment 2 does not match"
     );
 
     let r = Fr::rand(rng);
     let (comm_rho, rho) = ck.commit_with_rng(r, rng);
     let (comm_tau, tau) = ck.commit_with_rng(r, rng);
-    let commitment = ProofCommitment {
-        comm_rho,
-        comm_tau,
-    };
+    let commitment = ProofCommitment { comm_rho, comm_tau };
 
+    // Compute challenge = CommitKey and (C_rho + C_tau)
     let challenge = b2s_hash_to_field(&(*ck, commitment));
 
     let s = r + challenge * a;
@@ -57,21 +60,17 @@ pub fn prove<R: Rng>(ck: &CommitKey, instance: &Instance, witness: &Witness, rng
 pub fn verify(ck: &CommitKey, instance: &Instance, proof: &Proof) -> bool {
     let c_1 = instance.comm_1;
     let c_2 = instance.comm_2;
-    let ProofCommitment {
-        comm_rho,
-        comm_tau,
-    } = proof.commitment;
+    let ProofCommitment { comm_rho, comm_tau } = proof.commitment;
     let ProofResponse { s, u, t } = proof.response;
 
     let challenge = b2s_hash_to_field(&(*ck, proof.commitment));
 
     // Check s * G + u * H == C_rho + challenge * C_1
-    let check1 = ck.commit_with_explicit_randomness(s, u)
-        == c_1.mul(challenge).add_mixed(&comm_rho);
+    let check1 =
+        ck.commit_with_explicit_randomness(s, u) == c_1.mul(challenge).add_mixed(&comm_rho);
     // Check s * G + t * H == C_tau + challenge * C_2
-
-    let check2 = ck.commit_with_explicit_randomness(s, t)
-        == c_2.mul(challenge).add_mixed(&comm_tau);
+    let check2 =
+        ck.commit_with_explicit_randomness(s, t) == c_2.mul(challenge).add_mixed(&comm_tau);
     check1 && check2
 }
 
